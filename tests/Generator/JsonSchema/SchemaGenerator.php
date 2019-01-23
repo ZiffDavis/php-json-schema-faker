@@ -6,8 +6,15 @@ use Eris\Generator;
 use Eris\Generator\GeneratedValueSingle;
 use Eris\Random\RandomRange;
 
+// TODO: need to handle "default"
 class SchemaGenerator implements Generator
 {
+    private const MAX_DEPTH = 5;
+    private $method;
+    private $args;
+    private $nestedSchemaDepth;
+    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull"];
+
     public static function __callStatic($name, $args)
     {
         return new self($name, $args);
@@ -17,11 +24,53 @@ class SchemaGenerator implements Generator
     {
         $this->method = $method;
         $this->args = $args;
+        $this->nestedSchemaDepth = 0;
     }
 
     public function __invoke($size, RandomRange $rand)
     {
         return $this->{$this->method}($size, $rand);
+    }
+
+    private function validObject($size, RandomRange $rand)
+    {
+        $schema = new \stdClass;
+        $schema->type = "object";
+
+        if ($rand->rand(0, 1)) {
+            $schema->maxProperties = $rand->rand(5, 10);
+        }
+
+        if ($rand->rand(0, 1)) {
+            $schema->minProperties = $rand->rand(0, 5);
+        }
+
+        $pool = implode(range("a", "z"));
+        $numProperties = $rand->rand($schema->minProperties ?? 0, $schema->maxProperties ?? 10);
+        $properties = new \stdClass;
+
+        for ($i = 0; $i < $numProperties; $i++) {
+            $validSchema = $this->validSchema($size, $rand)->unbox();
+
+            if ($validSchema->type === "object") {
+                $this->nestedSchemaDepth++;
+            }
+
+            if ($this->nestedSchemaDepth > self::MAX_DEPTH) {
+                // array_values here is used to renumber the array
+                $this->methods = array_values(array_filter($this->methods, function ($method) {
+                    return $method !== "validObject";
+                }));
+            }
+
+            $properties->{substr(str_shuffle($pool), 0, $rand->rand(5,10))} = $validSchema;
+        }
+
+        $schema->properties = $properties;
+
+        return GeneratedValueSingle::fromJustValue($schema, self::class);
+
+        // TODO: more properties
     }
 
     private function validString($size, RandomRange $rand)
@@ -118,6 +167,19 @@ class SchemaGenerator implements Generator
         $schema->type = "boolean";
 
         return GeneratedValueSingle::fromJustValue($schema, self::class);
+    }
+
+    private function validNull($size, RandomRange $rand)
+    {
+        $schema = new \stdClass;
+        $schema->type = "null";
+
+        return GeneratedValueSingle::fromJustValue($schema, self::class);
+    }
+
+    private function validSchema($size, RandomRange $rand)
+    {
+        return $this->{$this->methods[$rand->rand(0, count($this->methods) - 1)]}($size, $rand);
     }
 
     public function shrink(GeneratedValueSingle $element)
