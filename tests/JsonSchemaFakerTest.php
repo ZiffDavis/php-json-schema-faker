@@ -24,7 +24,8 @@ class JsonSchemaFakerTest extends TestCase
             "validBoolean",
             "validNull",
             "validObject",
-            "validArray"
+            "validArray",
+            "validSumType"
         ]);
     }
 
@@ -41,8 +42,8 @@ class JsonSchemaFakerTest extends TestCase
             try {
                 Schema::import($schema)->in($schemaInstance);
             } catch (\Exception $e) {
-                $printableSchemaInstance = json_encode($schemaInstance);
-                $printableSchema = var_export($schema, true);
+                $printableSchemaInstance = json_encode($schemaInstance, JSON_PRETTY_PRINT);
+                $printableSchema = json_encode($schema, JSON_PRETTY_PRINT);
                 $message = "The following schema instance:\n\n$printableSchemaInstance\n\nIs invalid according to the following schema:\n\n$printableSchema\n\nValidation error: {$e->getMessage()}";
 
                 $this->fail($message);

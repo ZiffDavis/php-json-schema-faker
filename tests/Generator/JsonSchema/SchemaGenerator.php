@@ -13,7 +13,7 @@ class SchemaGenerator implements Generator
     private $method;
     private $args;
     private $nestedSchemaDepth;
-    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull", "validArray"];
+    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull", "validArray", "validSumType"];
 
     public static function __callStatic($name, $args)
     {
@@ -36,19 +36,22 @@ class SchemaGenerator implements Generator
     {
         $schema = new \stdClass;
         $schema->type = "array";
+        $currentDepth = $this->nestedSchemaDepth;
 
         if ($rand->rand(0, 1)) {
-            $validSchema = $this->validSchema($size, $rand)->unbox();
-
-            if ($validSchema->type === "object" || $validSchema->type === "array") {
-                $this->nestedSchemaDepth++;
-            }
-
-            if ($this->nestedSchemaDepth > self::MAX_DEPTH) {
+            if ($this->nestedSchemaDepth >= self::MAX_DEPTH) {
                 // array_values here is used to renumber the array
-                $this->methods = array_values(array_filter($this->methods, function ($method) {
+                $methods = array_values(array_filter($this->methods, function ($method) {
                     return $method !== "validObject" && $method !== "validArray";
                 }));
+            } else {
+                $methods = $this->methods;
+            }
+
+            $validSchema = $this->{$methods[$rand->rand(0, count($methods) - 1)]}($size, $rand)->unbox();
+
+            if (($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
+                $this->nestedSchemaDepth++;
             }
 
             $schema->items = $validSchema;
@@ -75,19 +78,22 @@ class SchemaGenerator implements Generator
         $pool = implode(range("a", "z"));
         $numProperties = $rand->rand($schema->minProperties ?? 0, $schema->maxProperties ?? 10);
         $properties = new \stdClass;
+        $currentDepth = $this->nestedSchemaDepth;
+
+        if ($this->nestedSchemaDepth >= self::MAX_DEPTH) {
+            // array_values here is used to renumber the array
+            $methods = array_values(array_filter($this->methods, function ($method) {
+                return $method !== "validObject" && $method !== "validArray";
+            }));
+        } else {
+            $methods = $this->methods;
+        }
 
         for ($i = 0; $i < $numProperties; $i++) {
-            $validSchema = $this->validSchema($size, $rand)->unbox();
+            $validSchema = $this->{$methods[$rand->rand(0, count($methods) - 1)]}($size, $rand)->unbox();
 
-            if ($validSchema->type === "object" || $validSchema->type === "array") {
+            if (($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
                 $this->nestedSchemaDepth++;
-            }
-
-            if ($this->nestedSchemaDepth > self::MAX_DEPTH) {
-                // array_values here is used to renumber the array
-                $this->methods = array_values(array_filter($this->methods, function ($method) {
-                    return $method !== "validObject" && $method !== "validArray";
-                }));
             }
 
             $properties->{substr(str_shuffle($pool), 0, $rand->rand(5,10))} = $validSchema;
@@ -226,9 +232,50 @@ class SchemaGenerator implements Generator
         return GeneratedValueSingle::fromJustValue($schema, self::class);
     }
 
-    private function validSchema($size, RandomRange $rand)
+    private function validSumType($size, RandomRange $rand)
     {
-        return $this->{$this->methods[$rand->rand(0, count($this->methods) - 1)]}($size, $rand);
+        $schema = new \stdClass;
+        $schema->type = [];
+        $currentDepth = $this->nestedSchemaDepth;
+
+        if ($this->nestedSchemaDepth >= self::MAX_DEPTH) {
+            // array_values here is used to renumber the array
+            $methods = array_values(array_filter($this->methods, function ($method) {
+                return $method !== "validObject" && $method !== "validArray" && $method !== "validSumType";
+            }));
+        } else {
+            $methods = array_values(array_filter($this->methods, function ($method) {
+                return $method !== "validSumType";
+            }));
+        }
+
+        $removeMethod = $rand->rand(0, 1) ? "validNumber" : "validInteger";
+        $methods = array_values(array_filter($methods, function ($method) use ($removeMethod) {
+            return $method !== $removeMethod;
+        }));
+
+        $methods = array_slice($methods, 0, $rand->rand(2, 4));
+
+        foreach ($methods as $method) {
+            $variant = $this->{$method}($size, $rand)->unbox();
+
+            foreach (get_object_vars($variant) as $property => $value) {
+                if ($property === "type") {
+                    $schema->type[] = $value;
+                } else {
+                    $schema->{$property} = $value;
+                }
+            }
+        }
+
+        return GeneratedValueSingle::fromJustValue($schema, self::class);
+    }
+
+    /**
+     * Method is for internal use only
+     */
+    private function validSchema($size, RandomRange $rand, $method)
+    {
     }
 
     public function shrink(GeneratedValueSingle $element)

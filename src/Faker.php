@@ -40,7 +40,48 @@ class Faker
 
         // TODO: should ensure valid JSON Schema
 
-        return self::generateInstance($schema, $schema);
+        // prevents accidental mutation of provided schema
+        $newSchema = self::cloneValue($schema);
+
+        return self::generateInstance($newSchema, $newSchema);
+    }
+
+    private static function cloneValue($value)
+    {
+        if (is_object($value)) {
+            return self::cloneObject($value);
+        } else if (is_array($value)) {
+            return self::cloneArray($value);
+        } 
+
+        return self::cloneScalar($value);
+    }
+
+    private static function cloneObject($value)
+    {
+        $clone = new \stdClass;
+
+        foreach (get_object_vars($value) as $k => $v) {
+            $clone->{$k} = self::cloneValue($v);
+        }
+
+        return $clone;
+    }
+
+    private static function cloneArray($value)
+    {
+        $clone = [];
+
+        foreach ($value as $k => $v) {
+            $clone[$k] = self::cloneValue($v);
+        }
+
+        return $clone;
+    }
+
+    private static function cloneScalar($value)
+    {
+        return $value;
     }
 
     private static function generateInstance($schema, $originalSchema)
@@ -203,7 +244,13 @@ class Faker
         }
 
         $schema = self::transformSchema($schema);
-        $schema->type = is_array($schema->type) ? $schema->type[array_rand($schema->type)] : $schema->type; // TODO: type may not exist
+
+        if (empty($schema->type)) {
+            $schema->type = array_keys($typeGenerators)[array_rand(array_keys($typeGenerators))];
+        } else {
+            $schema->type = is_array($schema->type) ? $schema->type[array_rand($schema->type)] : $schema->type; // TODO: type may not exist
+        }
+
         $schemaInstance = $typeGenerators[$schema->type]($schema, FakerFactory::create());
         $conditionalSchemas = $schema->allOf ?? [];
 
