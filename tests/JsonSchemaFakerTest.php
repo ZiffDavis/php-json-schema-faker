@@ -23,7 +23,8 @@ class JsonSchemaFakerTest extends TestCase
             "validInteger",
             "validBoolean",
             "validNull",
-            "validObject"
+            "validObject",
+            "validArray"
         ]);
     }
 

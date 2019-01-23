@@ -13,7 +13,7 @@ class SchemaGenerator implements Generator
     private $method;
     private $args;
     private $nestedSchemaDepth;
-    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull"];
+    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull", "validArray"];
 
     public static function __callStatic($name, $args)
     {
@@ -30,6 +30,31 @@ class SchemaGenerator implements Generator
     public function __invoke($size, RandomRange $rand)
     {
         return $this->{$this->method}($size, $rand);
+    }
+
+    private function validArray($size, RandomRange $rand)
+    {
+        $schema = new \stdClass;
+        $schema->type = "array";
+
+        if ($rand->rand(0, 1)) {
+            $validSchema = $this->validSchema($size, $rand)->unbox();
+
+            if ($validSchema->type === "object" || $validSchema->type === "array") {
+                $this->nestedSchemaDepth++;
+            }
+
+            if ($this->nestedSchemaDepth > self::MAX_DEPTH) {
+                // array_values here is used to renumber the array
+                $this->methods = array_values(array_filter($this->methods, function ($method) {
+                    return $method !== "validObject" && $method !== "validArray";
+                }));
+            }
+
+            $schema->items = $validSchema;
+        }
+
+        return GeneratedValueSingle::fromJustValue($schema);
     }
 
     private function validObject($size, RandomRange $rand)
@@ -52,14 +77,14 @@ class SchemaGenerator implements Generator
         for ($i = 0; $i < $numProperties; $i++) {
             $validSchema = $this->validSchema($size, $rand)->unbox();
 
-            if ($validSchema->type === "object") {
+            if ($validSchema->type === "object" || $validSchema->type === "array") {
                 $this->nestedSchemaDepth++;
             }
 
             if ($this->nestedSchemaDepth > self::MAX_DEPTH) {
                 // array_values here is used to renumber the array
                 $this->methods = array_values(array_filter($this->methods, function ($method) {
-                    return $method !== "validObject";
+                    return $method !== "validObject" && $method !== "validArray";
                 }));
             }
 
