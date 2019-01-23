@@ -54,6 +54,8 @@ class SchemaGenerator implements Generator
             $schema->items = $validSchema;
         }
 
+        // TODO: more properties here
+
         return GeneratedValueSingle::fromJustValue($schema);
     }
 
@@ -92,6 +94,28 @@ class SchemaGenerator implements Generator
         }
 
         $schema->properties = $properties;
+
+        switch ($rand->rand(0, 2)) {
+        case 0:
+            $schema->required = array_keys(get_object_vars($schema->properties));
+            break;
+        case 1:
+            $schema->required = [];
+            break;
+        default:
+            // omit "required" from schema
+        }
+
+        $randAdditionalProps = $rand->rand(0, 2);
+
+        switch ($randAdditionalProps) {
+        case 0:
+        case 1:
+            $schema->additionalProperties = (bool) $randAdditionalProps;
+            break;
+        default:
+            // omit "additionalProperties" from schema
+        }
 
         return GeneratedValueSingle::fromJustValue($schema, self::class);
 
