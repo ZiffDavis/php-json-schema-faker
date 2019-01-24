@@ -149,6 +149,27 @@ class SchemaGenerator implements Generator
             if ($rand->rand(0, 1)) {
                 $schema->maxLength = $maxLength;
             }
+
+            // generate string schema with conditional
+            if ($rand->rand(0, 1)) {
+                $schema->if = new \stdClass;
+                $schema->if->pattern = "^[a-z]$";
+
+                if ($maxLength - $minLength >=  10) {
+                    if ($rand->rand(0, 1)) {
+                        $maxMinDiff = $maxLength - $minLength;
+                        $schema->then = new \stdClass;
+                        $schema->then->maxLength = $maxLength - floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
+                        $maxLength = $schema->then->maxLength;
+                    }
+
+                    if ($rand->rand(0, 1)) {
+                        $maxMinDiff = $maxLength - $minLength;
+                        $schema->else = new \stdClass;
+                        $schema->else->minLength = $minLength + floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
+                    }
+                }
+            }
             break;
         case 2:
             $formats = ["regex", "uri", "date-time"];
@@ -269,13 +290,6 @@ class SchemaGenerator implements Generator
         }
 
         return GeneratedValueSingle::fromJustValue($schema, self::class);
-    }
-
-    /**
-     * Method is for internal use only
-     */
-    private function validSchema($size, RandomRange $rand, $method)
-    {
     }
 
     public function shrink(GeneratedValueSingle $element)
