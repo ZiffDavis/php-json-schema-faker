@@ -4,6 +4,8 @@ namespace ZiffDavis\JsonSchemaFaker;
 
 use Faker\Factory as FakerFactory;
 use Swaggest\JsonSchema\Schema;
+use function ZiffDavis\JsonSchemaFaker\merge_schemas;
+use ZiffDavis\JsonSchemaFaker\Generator\StringInstance;
 
 class Faker
 {
@@ -107,49 +109,7 @@ class Faker
 
             return $obj;
         };
-        $typeGenerators["string"] = function ($schema, $faker) {
-            // TODO: this must be a non-negative integer. check if that's allowed by JSON schema lib
-            // TODO: should it be possible for maxLength to be less than minLength
-            // TODO: "pattern" property with "minLength" and "maxLength" is tricky
-
-            if (!empty($schema->pattern)) {
-                return $faker->regexify($schema->pattern);
-            }
-
-            $minLength = $schema->minLength ?? 0;
-            $maxLength = $schema->maxLength ?? 100; // setting to arbitrary length for simplicity
-            $maxLength = $minLength > $maxLength ? $minLength : $maxLength;
-
-            if (isset($schema->format)) {
-                switch ($schema->format) {
-                case "uri":
-                    // TODO: should restrict size of randomly generated URL according to $minLength and $maxLength
-                    return $faker->url;
-                case "date-time":
-                    // TODO: should restrict size of randomly generated datetime according to $minLength and $maxLength
-                    return $faker->date("c");
-                case "regex":
-                    // TODO: more random
-                    return "[a-zA-Z0-9]";
-                default:
-                    throw new \Exception("Unsupported format value '{$schema->format}'");
-                }
-            }
-
-            $textLength = rand($minLength, $maxLength);
-
-            if ($textLength < 5) {
-                return str_pad("", $textLength, "a");
-            }
-
-            $string = "";
-
-            while (strlen($string) < $textLength) {
-                $string .= $faker->text();
-            }
-
-            return substr($string, 0, $textLength);
-        };
+        $typeGenerators["string"] = new StringInstance();
         $typeGenerators["array"] = function ($schema, $faker) use ($originalSchema) {
             // TODO: "Omitting this keyword has the same behavior as an empty schema" what does this mean? 
             // TODO: Need to handle "contains" validation keyword
@@ -259,11 +219,11 @@ class Faker
                 Schema::import($conditionalSchema->if)->in($schemaInstance);
 
                 if (isset($conditionalSchema->then)) {
-                    $schema = self::mergeSchemas($schema, $conditionalSchema->then);
+                    $schema = merge_schemas($schema, $conditionalSchema->then);
                 }
             } catch (\Exception $e) {
                 if (isset($conditionalSchema->else)) {
-                    $schema = self::mergeSchemas($schema, $conditionalSchema->else);
+                    $schema = merge_schemas($schema, $conditionalSchema->else);
                 }
             }
         }
@@ -282,7 +242,7 @@ class Faker
         while (count($subSchemas) > 0) {
             $subSchema = array_shift($subSchemas);
             $subSchemas = $subSchemas + self::extractSubSchemas($subSchema);
-            $schema = self::mergeSchemas($schema, $subSchema);
+            $schema = merge_schemas($schema, $subSchema);
         }
 
         return $schema;
@@ -294,31 +254,5 @@ class Faker
         $oneOf = !empty($schema->oneOf) ? [$oneOf[array_rand($oneOf)]] : []; // TODO: should validate against exactly one of these
 
         return ($schema->allOf ?? []) + $anyOf + $oneOf;
-    }
-
-    private static function mergeSchemas($schema, $subSchema)
-    {
-        // TODO: lots of merge detail work to do here 
-        // TODO: ideally would be immutable
-
-        $conditionalSchemas = [];
-
-        if (isset($subSchema->if) && (isset($subSchema->then) || isset($subSchema->else))) {
-            $conditionalSchema = new \stdClass;
-            $conditionalSchema->if = $subSchema->if;
-
-            if (isset($subSchema->then)) {
-                $conditionalSchema->then = $subSchema->then;
-            } else {
-                $conditionalSchema->else = $subSchema->else;
-            }
-
-            $conditionalSchemas[] = $conditionalSchema;
-        }
-
-        $schema->allOf = $schema->allOf ?? [];
-        $schema->allOf = $schema->allOf + [$subSchema] + $conditionalSchemas;
-
-        return $schema;
     }
 }
