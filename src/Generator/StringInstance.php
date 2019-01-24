@@ -4,6 +4,7 @@ namespace ZiffDavis\JsonSchemaFaker\Generator;
 
 use Swaggest\JsonSchema\Schema;
 use function ZiffDavis\JsonSchemaFaker\merge_schemas;
+use function ZiffDavis\JsonSchemaFaker\clone_value;
 
 class StringInstance
 {
@@ -59,13 +60,21 @@ class StringInstance
                     $schema = merge_schemas($schema, $schema->then);
                 }
             } catch (\Exception $e) {
-                if (isset($conditionalSchema->else)) {
-                    $schema = merge_schemas($schema, $conditionalSchema->else);
+                if (isset($schema->else)) {
+                    $schema = merge_schemas($schema, $schema->else);
                 }
             }
+
+            // remove conditional from schema
+            $schema = clone_value($schema);
+
+            unset($schema->if);
+            unset($schema->then);
+            unset($schema->else);
+
+            return $this->__invoke($schema, $faker);
         }
 
         return $string;
-        //return self($schema, $faker);
     }
 }

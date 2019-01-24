@@ -5,6 +5,7 @@ namespace ZiffDavis\JsonSchemaFaker;
 use Faker\Factory as FakerFactory;
 use Swaggest\JsonSchema\Schema;
 use function ZiffDavis\JsonSchemaFaker\merge_schemas;
+use function ZiffDavis\JsonSchemaFaker\clone_value;
 use ZiffDavis\JsonSchemaFaker\Generator\StringInstance;
 
 class Faker
@@ -43,47 +44,9 @@ class Faker
         // TODO: should ensure valid JSON Schema
 
         // prevents accidental mutation of provided schema
-        $newSchema = self::cloneValue($schema);
+        $newSchema = clone_value($schema);
 
         return self::generateInstance($newSchema, $newSchema);
-    }
-
-    private static function cloneValue($value)
-    {
-        if (is_object($value)) {
-            return self::cloneObject($value);
-        } else if (is_array($value)) {
-            return self::cloneArray($value);
-        } 
-
-        return self::cloneScalar($value);
-    }
-
-    private static function cloneObject($value)
-    {
-        $clone = new \stdClass;
-
-        foreach (get_object_vars($value) as $k => $v) {
-            $clone->{$k} = self::cloneValue($v);
-        }
-
-        return $clone;
-    }
-
-    private static function cloneArray($value)
-    {
-        $clone = [];
-
-        foreach ($value as $k => $v) {
-            $clone[$k] = self::cloneValue($v);
-        }
-
-        return $clone;
-    }
-
-    private static function cloneScalar($value)
-    {
-        return $value;
     }
 
     private static function generateInstance($schema, $originalSchema)
