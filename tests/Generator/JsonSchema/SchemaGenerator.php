@@ -130,6 +130,11 @@ class SchemaGenerator implements Generator
 
     private function validString($size, RandomRange $rand)
     {
+        return GeneratedValueSingle::fromJustValue($this->generateString($rand), self::class);
+    }
+
+    private function generateString(RandomRange $rand)
+    {
         $schema = new \stdClass;
         $schema->type = "string"; // TODO: what is the correct behavior if type is omitted?
 
@@ -139,8 +144,8 @@ class SchemaGenerator implements Generator
             $schema->regex = "^[0-9A-Za-z]{23}$";
             break;
         case 1:
-            $minLength = $rand->rand(0, 500);
-            $maxLength = $rand->rand(501, 1000);
+            $minLength = $minLength ?? $rand->rand(0, 500);
+            $maxLength = $maxLength ?? $rand->rand(501, 1000);
 
             if ($rand->rand(0, 1)) {
                 $schema->minLength = $minLength;
@@ -153,21 +158,39 @@ class SchemaGenerator implements Generator
             // generate string schema with conditional
             if ($rand->rand(0, 1)) {
                 $schema->if = new \stdClass;
+                // TODO: can the "if" be a more random sub-pattern of the regex above?
                 $schema->if->pattern = "^[a-z]$";
+                $maxMinDiff = $maxLength - $minLength;
 
-                if ($maxLength - $minLength >=  10) {
+                if ($rand->rand(0, 1)) {
+                    $schema->then = new \stdClass;
+                    $schema->then->maxLength = $maxLength = $maxLength - floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
+                }
+
+                if ($rand->rand(0, 1)) {
+                    $maxMinDiff = $maxLength - $minLength;
+                    $schema->else = new \stdClass;
+                    $schema->else->minLength = $minLength = $minLength + floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
+                }
+            }
+
+            if ($numSubSchemas = $rand->rand(0, 2)) {
+                $schema->allOf = [];
+
+                for ($i = 0; $i < $numSubSchemas; $i++) {
+                    $subSchema = new \stdClass;
+
                     if ($rand->rand(0, 1)) {
                         $maxMinDiff = $maxLength - $minLength;
-                        $schema->then = new \stdClass;
-                        $schema->then->maxLength = $maxLength - floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
-                        $maxLength = $schema->then->maxLength;
+                        $subSchema->maxLength = $maxLength = $maxLength - floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
                     }
 
                     if ($rand->rand(0, 1)) {
                         $maxMinDiff = $maxLength - $minLength;
-                        $schema->else = new \stdClass;
-                        $schema->else->minLength = $minLength + floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
+                        $subSchema->minLength = $minLength = $minLength + floor($maxMinDiff * $rand->rand(0, 100) * 0.01);
                     }
+
+                    $schema->allOf[] = $subSchema;
                 }
             }
             break;
@@ -180,7 +203,7 @@ class SchemaGenerator implements Generator
             $schema->minLength = $schema->maxLength = $rand->rand(0, 1000);
         }
 
-        return GeneratedValueSingle::fromJustValue($schema, self::class);
+        return $schema;
     }
 
     // TODO: need to test "multipleOf"

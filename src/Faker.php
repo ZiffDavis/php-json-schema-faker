@@ -166,56 +166,12 @@ class Faker
             $schema = $referencedSchema;
         }
 
-        $schema = self::transformSchema($schema);
-
         if (empty($schema->type)) {
             $schema->type = array_keys($typeGenerators)[array_rand(array_keys($typeGenerators))];
         } else {
             $schema->type = is_array($schema->type) ? $schema->type[array_rand($schema->type)] : $schema->type; // TODO: type may not exist
         }
 
-        $schemaInstance = $typeGenerators[$schema->type]($schema, FakerFactory::create());
-        $conditionalSchemas = $schema->allOf ?? [];
-
-        foreach ($conditionalSchemas as $conditionalSchema) {
-            try {
-                Schema::import($conditionalSchema->if)->in($schemaInstance);
-
-                if (isset($conditionalSchema->then)) {
-                    $schema = merge_schemas($schema, $conditionalSchema->then);
-                }
-            } catch (\Exception $e) {
-                if (isset($conditionalSchema->else)) {
-                    $schema = merge_schemas($schema, $conditionalSchema->else);
-                }
-            }
-        }
-
         return $typeGenerators[$schema->type]($schema, FakerFactory::create());
-    }
-
-    /**
-     * "Lifts" a schema's subschemas found in properties like "allOf", "anyOf", "oneOf", etc. into the schema to simplify value generation.
-     * Will only partially merge subschemas with conditional keywords.
-     */
-    private static function transformSchema($schema)
-    {
-        $subSchemas = self::extractSubSchemas($schema);
-
-        while (count($subSchemas) > 0) {
-            $subSchema = array_shift($subSchemas);
-            $subSchemas = $subSchemas + self::extractSubSchemas($subSchema);
-            $schema = merge_schemas($schema, $subSchema);
-        }
-
-        return $schema;
-    }
-
-    private static function extractSubSchemas($schema)
-    {
-        $anyOf = !empty($schema->anyOf) ? [$anyOf[array_rand($anyOf)]] : [];
-        $oneOf = !empty($schema->oneOf) ? [$oneOf[array_rand($oneOf)]] : []; // TODO: should validate against exactly one of these
-
-        return ($schema->allOf ?? []) + $anyOf + $oneOf;
     }
 }
