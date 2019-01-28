@@ -178,7 +178,7 @@ function clone_value($value)
         return clone_std_class($value);
     } else if (is_array($value)) {
         return clone_array($value);
-    } else if (is_scalar($value)) {
+    } else if (is_scalar($value) || $value === null) {
         return $value;
     }
 

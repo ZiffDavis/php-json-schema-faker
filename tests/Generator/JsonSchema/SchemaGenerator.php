@@ -13,7 +13,7 @@ class SchemaGenerator implements Generator
     private $method;
     private $args;
     private $nestedSchemaDepth;
-    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull", "validArray", "validSumType"];
+    private $methods = ["validObject", "validString", "validNumber", "validInteger", "validBoolean", "validNull", "validArray", "validSumType", "validEnum"];
 
     public static function __callStatic($name, $args)
     {
@@ -30,6 +30,21 @@ class SchemaGenerator implements Generator
     public function __invoke($size, RandomRange $rand)
     {
         return $this->{$this->method}($size, $rand);
+    }
+
+    private function validEnum($size, RandomRange $rand)
+    {
+        $enums = [
+            [null, 99, 89, 55],
+            ["test", "fizzbuzz"],
+            [["test"], [1, 2, 3], [4, 5, 6]],
+            [(object) ["foo" => "bar"], (object) ["fizz" => "buzz"]]
+        ];
+
+        $schema = new \stdClass;
+        $schema->enum = $enums[$rand->rand(0, count($enums) - 1)];
+
+        return GeneratedValueSingle::fromJustValue($schema, self::class);
     }
 
     private function validArray($size, RandomRange $rand)
@@ -50,7 +65,7 @@ class SchemaGenerator implements Generator
 
             $validSchema = $this->{$methods[$rand->rand(0, count($methods) - 1)]}($size, $rand)->unbox();
 
-            if (($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
+            if (isset($validSchema->type) && ($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
                 $this->nestedSchemaDepth++;
             }
 
@@ -92,7 +107,7 @@ class SchemaGenerator implements Generator
         for ($i = 0; $i < $numProperties; $i++) {
             $validSchema = $this->{$methods[$rand->rand(0, count($methods) - 1)]}($size, $rand)->unbox();
 
-            if (($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
+            if (isset($validSchema->type) && ($validSchema->type === "object" || $validSchema->type === "array" || in_array($validSchema->type, ["object", "array"], true)) && $currentDepth === $this->nestedSchemaDepth) {
                 $this->nestedSchemaDepth++;
             }
 

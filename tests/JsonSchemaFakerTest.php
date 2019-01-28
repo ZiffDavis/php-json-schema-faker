@@ -66,6 +66,53 @@ class JsonSchemaFakerTest extends TestCase
 }
 JSON;
 
+        $json = <<<JSON
+{
+            "type": [
+                "string",
+                "number"
+            ],
+            "if": {
+                "pattern": "^[a-z]$"
+            },
+            "then": {
+                "maxLength": 294
+            },
+            "else": {
+                "minLength": 126
+            },
+            "allOf": [
+                {}
+            ],
+            "minimum": 1.2000000000000002,
+            "maxim
+JSON;
+
+        $json = <<<JSON
+{
+            "type": [
+                "string",
+                "number"
+            ],
+            "if": {
+                "pattern": "^[a-z]$"
+            },
+            "then": {
+                "maxLength": 294
+            },
+            "else": {
+                "minLength": 126
+            },
+            "allOf": [
+                {}
+            ],
+            "minimum": 1.2000000000000002,
+            "maximum": 1.2000000000000002,
+            "exclusiveMinimum": 1.1000000000000001,
+            "exclusiveMaximum": 1.3
+}
+JSON;
+
         $schema = json_decode($json);
         $schemaInstance = JsonSchemaFaker::fake($schema);
 
@@ -100,6 +147,4 @@ JSON;
             $this->assertTrue(true);
         });
     }
-
-
 }

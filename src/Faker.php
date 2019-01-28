@@ -166,6 +166,10 @@ class Faker
             $schema = $referencedSchema;
         }
 
+        if (isset($schema->enum)) {
+            return $schema->enum[array_rand($schema->enum)];
+        }
+
         if (empty($schema->type)) {
             $schema->type = array_keys($typeGenerators)[array_rand(array_keys($typeGenerators))];
         } else {
