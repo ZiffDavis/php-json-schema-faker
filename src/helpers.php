@@ -2,6 +2,14 @@
 
 namespace ZiffDavis\JsonSchemaFaker;
 
+function array_symmetric_diff_key(array $array1, array $array2)
+{
+    return array_merge(
+        array_diff_key($array1, $array2),
+        array_diff_key($array2, $array1)
+    );
+}
+
 function extract_conditionals($schema) 
 {
     $conditionalSchemas = [];

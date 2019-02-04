@@ -2,30 +2,116 @@
 
 namespace ZiffDavis\JsonSchemaFaker;
 
-use Faker\Factory as FakerFactory;
-use function ZiffDavis\JsonSchemaFaker\clone_value;
-use ZiffDavis\JsonSchemaFaker\Generator\StringInstance;
+use ZiffDavis\JsonSchemaFaker\Schema\Instance;
 
 class Schema
 {
+    private const TYPES = [
+        "array",
+        "boolean",
+        "integer",
+        "null",
+        "number",
+        "object",
+        "string"
+    ];
     private $spec;
-    private static $typeGenerators = [];
+    private $parentSchema;
 
-    public static function make(\stdClass $spec): self
+    public static function make(\stdClass $spec, ?self $parentSchema = null): self
     {
-        return new self(clone_value($spec));
+        return new self(clone_value($spec), $parentSchema);
     }
 
-    public function generateInstance()
+    public function toInstance()
     {
-        return self::_generateInstance($this->spec, $this->spec);
+        $instances = array_map(function ($schema) {
+            return self::make($schema)->toInstance();
+        }, $this->spec->allOf ?? []);
+        $conditionInstance = new Instance\EmptyInstance();
+
+        if (isset($this->spec->if) && (isset($this->spec->then) || isset($this->spec->else))) { 
+            $conditionInstance = self::make($this->spec->if)->toInstance();
+            $thenInstance = new Instance\EmptyInstance();
+            $elseInstance = new Instance\EmptyInstance();
+
+            if (isset($this->spec->then)) {
+                $thenInstance = new Instance\AllInstance(
+                    self::make($this->spec->then)->toInstance(),
+                    $conditionInstance
+                );
+            }
+
+            if (isset($this->spec->else)) {
+                $elseInstance = new Instance\AllInstance(
+                    self::make($this->spec->else)->toInstance(),
+                    new Instance\NotInstance($conditionInstance)
+                );
+            }
+
+            $conditionInstance = new Instance\SumInstance($thenInstance, $elseInstance);
+        }
+
+        $typeInstance = new Instance\EmptyInstance();
+
+        if (isset($this->spec->enum)) {
+            $typeInstance = new Instance\EnumInstance($this->spec->enum);
+        } else if (is_array($this->spec->type)) {
+            $typeInstance = new Instance\SumInstance(array_map(function (string $type): Instance\InstanceInterface {
+                return $this->toInstanceByType($type);
+            }, $this->spec->type));
+        } else if (isset($this->spec->type)) {
+            $typeInstance = $this->toInstanceByType($this->spec->type);
+        }
+
+        return new Instance\AllInstance($conditionInstance, $typeInstance, ...$instances);
     }
 
-    private function __construct(\stdClass $spec)
+    private function toInstanceByType(string $type): Instance\InstanceInterface
+    {
+        switch($type) {
+        case "string":
+            return new Instance\StringInstance(
+                $this->spec->pattern ?? null,
+                $this->spec->minLength ?? null,
+                $this->spec->maxLength ?? null,
+                $this->spec->format ?? null
+            );
+        case "null":
+            return new Instance\NullInstance();
+        case "object":
+            $properties = [];
+
+            foreach (get_object_vars($this->spec->properties) as $property => $value) {
+                $properties[$property] = self::make($value)->toInstance();
+            }
+
+            return new Instance\ObjectInstance($properties);
+        case "boolean":
+            return new Instance\BooleanInstance();
+        }
+
+        throw new \Exception("Cannot make schema instance for unknown type '$type'");
+    }
+
+    private function oldestAncestor(): self
+    {
+        $ancestor = $this;
+
+        while (isset($ancestor->parentSchema)) {
+            $ancestor = $ancestor->parentSchema;
+        }
+
+        return $ancestor;
+    } 
+
+    private function __construct(\stdClass $spec, ?self $parentSchema)
     {
         $this->spec = $spec;
+        $this->parentSchema = $parentSchema;
     }
 
+    // TODO: merge into type instances
     private static function _generateInstance($schema, $originalSchema)
     {
         if (is_bool($schema)) {
@@ -33,23 +119,6 @@ class Schema
         }
 
         $typeGenerators = [];
-        $typeGenerators["object"] = function ($schema, $faker) use ($originalSchema) {
-            // TODO: lots more properties to support here
-            // TODO: Can "if" keywords exist directly on the object?
-            $obj = new \stdClass;
-
-            // TODO: should decide which properties to add based on "required"
-            if (isset($schema->properties)) {
-                foreach ($schema->properties as $property => $subSchema) {
-                    $obj->{$property} = self::_generateInstance($subSchema, $originalSchema);
-                }
-            }
-
-            $allOf = $schema->allOf ?? [];
-
-            return $obj;
-        };
-        $typeGenerators["string"] = new StringInstance();
         $typeGenerators["array"] = function ($schema, $faker) use ($originalSchema) {
             // TODO: "Omitting this keyword has the same behavior as an empty schema" what does this mean? 
             // TODO: Need to handle "contains" validation keyword
@@ -78,12 +147,6 @@ class Schema
             }
 
             return $array;
-        };
-        $typeGenerators["null"] = function ($schema, $faker) {
-            return null;
-        };
-        $typeGenerators["boolean"] = function ($schema, $faker) {
-            return (bool) rand(0, 1);
         };
         $typeGenerators["integer"] = function ($schema, $faker) {
             $multipleOf = $schema->multipleOf ?? null;
@@ -141,10 +204,6 @@ class Schema
             }
 
             $schema = $referencedSchema;
-        }
-
-        if (isset($schema->enum)) {
-            return $schema->enum[array_rand($schema->enum)];
         }
 
         if (empty($schema->type)) {

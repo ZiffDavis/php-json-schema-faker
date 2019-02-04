@@ -132,6 +132,7 @@ JSON;
     private function doSTuff($generator)
     {
         $this->forAll($generator)->then(function ($schema) {
+            var_dump($schema);
             $schemaInstance = JsonSchemaFaker::fake($schema);
 
             try {

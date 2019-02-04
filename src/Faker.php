@@ -2,6 +2,8 @@
 
 namespace ZiffDavis\JsonSchemaFaker;
 
+use Faker\Factory as FakerFactory;
+
 class Faker
 {
     public static function fake($schema)
@@ -33,6 +35,6 @@ class Faker
             }
         }
 
-        return Schema::make($schema)->generateInstance();
+        return Schema::make($schema)->toInstance()->realize(FakerFactory::create());
     }
 }
